@@ -1,4 +1,5 @@
 const knex = appRequire('init/knex').knex;
+const manager = appRequire('services/manager');
 
 const add = (name, host, port, password, method, allot) => {
   return knex('server').insert({
@@ -34,8 +35,41 @@ const edit = (id, name, host, port, password, method, scale = 1, allot) => {
   });
 };
 
-const list = () => {
-  return knex('server').select(['id', 'name', 'host', 'port', 'password', 'method', 'scale', 'allot']).orderBy('name');
+const list = async (options = {}) => {
+  const serverList = await knex('server').select([
+    'id',
+    'name',
+    'host',
+    'port',
+    'password',
+    'method',
+    'scale',
+    'allot'
+  ]).orderBy('name');
+  if(options.status) {
+    const serverStatus = [];
+    const getServerStatus = (server, index) => {
+      return manager.send({
+        command: 'list',
+      }, {
+        host: server.host,
+        port: server.port,
+        password: server.password,
+      }).then(success => {
+        return { status: 0, index };
+      }).catch(error => {
+        return { status: -1, index };
+      });
+    };
+    serverList.forEach((server, index) => {
+      serverStatus.push(getServerStatus(server, index));
+    });
+    const status = await Promise.all(serverStatus);
+    status.forEach(f => {
+      serverList[f.index].status = f.status;
+    });
+  }
+  return serverList;
 };
 
 exports.add = add;

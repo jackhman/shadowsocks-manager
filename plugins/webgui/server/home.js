@@ -16,7 +16,7 @@ exports.signup = (req, res) => {
   req.checkBody('password', 'Invalid password').notEmpty();
   let type = 'normal';
   req.getValidationResult().then(result => {
-    if(result.isEmpty()) {
+    if (result.isEmpty()) {
       const email = req.body.email.toString().toLowerCase();
       const code = req.body.code;
       return emailPlugin.checkCode(email, code);
@@ -25,7 +25,7 @@ exports.signup = (req, res) => {
   }).then(success => {
     // The first user will be admin
     return knex('user').count('id AS count').then(success => {
-      if(!success[0].count) {
+      if (!success[0].count) {
         type = 'admin';
       }
       return;
@@ -40,7 +40,7 @@ exports.signup = (req, res) => {
       type,
     });
   }).then(success => {
-    if(success[0] > 1) {
+    if (success[0] > 1) {
       return autoAddAccount(success[0])
     } else {
       return true;
@@ -58,33 +58,79 @@ exports.signup = (req, res) => {
 };
 
 const autoAddAccount = (userId) => {
-  let port = 50000;
+  // let port = 50000;
   return knex('webguiSetting').select().where({
     key: 'system',
   })
     .then(success => JSON.parse(success[0].value))
     .then(success => {
       const newUserAccount = success.accountForNewUser;
-      if(!success.accountForNewUser.isEnable) {
+      if (!success.accountForNewUser.isEnable) {
         return;
       }
-      return knex('account_plugin').select().orderBy('port', 'DESC').limit(1)
-        .then(success => {
-          if(success.length) {
-            port = success[0].port + 1;
+      const getNewPort = () => {
+        return knex('webguiSetting').select().where({
+          key: 'system',
+        }).then(success => {
+          if (!success.length) {
+            return Promise.reject('settings not found');
           }
-          return account.addAccount(newUserAccount.type || 5, {
-            user: userId,
-            port,
-            password: Math.random().toString().substr(2,10),
-            time: Date.now(),
-            limit: newUserAccount.limit || 8,
-            flow: (newUserAccount.flow ? newUserAccount.flow : 350) * 1000000,
-            autoRemove: 1,
-          });
+          success[0].value = JSON.parse(success[0].value);
+          return success[0].value.port;
+        }).then(port => {
+          if (port.random) {
+            const getRandomPort = () => Math.floor(Math.random() * (port.end - port.start + 1) + port.start);
+            const retry = 0;
+            let myPort = getRandomPort();
+            const checkIfPortExists = port => {
+              return knex('account_plugin').select()
+                .where({port}).then(success => {
+                  if (success.length) {
+                    return Promise.reject('exists');
+                  }
+                  return 'not exists';
+                });
+            };
+            return checkIfPortExists(myPort)
+              .then(success => myPort)
+              .catch(err => {
+                retry++;
+                if (retry <= 30) {
+                  myPort = getRandomPort();
+                  return checkIfPortExists(myPort);
+                }
+                return Promise.reject('Can not get a random port');
+              });
+          } else {
+            return knex('account_plugin').select()
+              .whereBetween('port', [port.start, port.end])
+              .orderBy('port', 'DESC').limit(1).then(success => {
+                if (success.length) {
+                  return success[0].port + 1;
+                }
+                return port.start;
+              });
+          }
         });
+      };
+      // return knex('account_plugin').select().orderBy('port', 'DESC').limit(1)
+      // .then(success => {
+      //   if(success.length) {
+      //     port = success[0].port + 1;
+      //   }
+      getNewPort().then(port => {
+        return account.addAccount(newUserAccount.type || 5, {
+          user: userId,
+          port,
+          password: Math.random().toString().substr(2, 10),
+          time: Date.now(),
+          limit: newUserAccount.limit || 8,
+          flow: (newUserAccount.flow ? newUserAccount.flow : 350) * 1000000,
+          autoRemove: 1,
+        });
+      });
     });
-};
+}
 exports.autoAddAccount = autoAddAccount;
 
 exports.login = (req, res) => {
@@ -93,7 +139,7 @@ exports.login = (req, res) => {
   req.checkBody('email', 'Invalid email').isEmail();
   req.checkBody('password', 'Invalid password').notEmpty();
   req.getValidationResult().then(result => {
-    if(result.isEmpty()) {
+    if (result.isEmpty()) {
       const email = req.body.email.toString().toLowerCase();
       const password = req.body.password;
       return user.checkPassword(email, password);
@@ -103,11 +149,11 @@ exports.login = (req, res) => {
     logger.info(`[${ req.body.email }] login success`);
     req.session.user = success.id;
     req.session.type = success.type;
-    res.send({ type: success.type });
+    res.send({type: success.type});
   }).catch(err => {
     logger.error(`User[${ req.body.email }] login fail: ${ err }`);
     const errorData = ['invalid body', 'user not exists', 'invalid password', 'password retry out of limit'];
-    if(errorData.indexOf(err) < 0) {
+    if (errorData.indexOf(err) < 0) {
       return res.status(500).end();
     } else {
       return res.status(403).end(err);
@@ -122,23 +168,27 @@ exports.logout = (req, res) => {
 };
 
 exports.status = (req, res) => {
-  res.send({ status: req.session.type });
+  res.send({status: req.session.type});
 };
 
 exports.sendCode = (req, res) => {
   req.checkBody('email', 'Invalid email').isEmail();
   req.getValidationResult().then(result => {
-    if(result.isEmpty) { return; }
+    if (result.isEmpty) {
+      return;
+    }
     return Promise.reject('invalid email');
   }).then(() => {
     return knex('webguiSetting').select().where({
       key: 'system',
     })
-    .then(success => JSON.parse(success[0].value))
-    .then(success => {
-      if(success.signUp.isEnable) { return; }
-      return Promise.reject('signup close');
-    });
+      .then(success => JSON.parse(success[0].value))
+      .then(success => {
+        if (success.signUp.isEnable) {
+          return;
+        }
+        return Promise.reject('signup close');
+      });
   }).then(() => {
     const email = req.body.email.toString().toLowerCase();
     const ip = req.headers['x-real-ip'] || req.connection.remoteAddress;
@@ -152,7 +202,7 @@ exports.sendCode = (req, res) => {
   }).catch(err => {
     logger.error(err);
     const errorData = ['email in black list', 'send email out of limit', 'signup close'];
-    if(errorData.indexOf(err) < 0) {
+    if (errorData.indexOf(err) < 0) {
       return res.status(403).end();
     } else {
       return res.status(403).end(err);
@@ -167,18 +217,24 @@ exports.sendResetPasswordEmail = (req, res) => {
   knex('user').select().where({
     username: email,
   }).then(users => {
-    if(!users.length) {
+    if (!users.length) {
       return Promise.reject('user not exists');
     }
     return users[0];
   }).then(userData => {
-    if(userData.resetPasswordTime + 600 * 1000 >= Date.now()) {
+    if (userData.resetPasswordTime + 600 * 1000 >= Date.now()) {
       return Promise.reject('already send');
     }
     token = crypto.randomBytes(16).toString('hex');
     const ip = req.headers['x-real-ip'] || req.connection.remoteAddress;
     const session = req.sessionID;
     const address = config.plugins.webgui.site + '/home/password/reset/' + token;
+    return emailPlugin.sendMail(email, 'ss密码重置', '请访问下列地址重置您的密码：\n' + address, {
+      ip,
+      session,
+      type: 'reset',
+    });
+  }).then(success => {
     return user.edit({
       username: email,
     }, {
@@ -195,7 +251,7 @@ exports.sendResetPasswordEmail = (req, res) => {
   }).catch(err => {
     logger.error(err);
     const errorData = ['already send', 'user not exists'];
-    if(errorData.indexOf(err) < 0) {
+    if (errorData.indexOf(err) < 0) {
       return res.status(403).end();
     } else {
       return res.status(403).end(err);
@@ -207,13 +263,13 @@ exports.checkResetPasswordToken = (req, res) => {
   const token = req.query.token;
   knex('user').select().where({
     resetPasswordId: token,
-  }).whereBetween('resetPasswordTime', [ Date.now() - 600 * 1000, Date.now() ])
-  .then(users => {
-    if(!users.length) {
-      return Promise.reject('user not exists');
-    }
-    return users[0];
-  }).then(success => {
+  }).whereBetween('resetPasswordTime', [Date.now() - 600 * 1000, Date.now()])
+    .then(users => {
+      if (!users.length) {
+        return Promise.reject('user not exists');
+      }
+      return users[0];
+    }).then(success => {
     res.send('success');
   }).catch(err => {
     console.log(err);
@@ -225,7 +281,9 @@ exports.resetPassword = (req, res) => {
   req.checkBody('token', 'Invalid token').notEmpty();
   req.checkBody('password', 'Invalid password').notEmpty();
   req.getValidationResult().then(result => {
-    if(result.isEmpty) { return; }
+    if (result.isEmpty) {
+      return;
+    }
     return Promise.reject('invalid body');
   }).then(() => {
     const token = req.body.token;

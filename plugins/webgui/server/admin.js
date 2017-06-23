@@ -6,10 +6,14 @@ const user = appRequire('plugins/user/index');
 const knex = appRequire('init/knex').knex;
 const moment = require('moment');
 const alipay = appRequire('plugins/alipay/index');
-const home = appRequire('plugins/webgui/server/home');
+const email = appRequire('plugins/email/index');
 
+
+const home = appRequire('plugins/webgui/server/home');
 exports.getServers = (req, res) => {
-  serverManager.list().then(success => {
+  serverManager.list({
+    status: true,
+  }).then(success => {
     res.send(success);
   }).catch(err => {
     console.log(err);
@@ -635,6 +639,28 @@ exports.addUser = (req, res) => {
     }else{
       res.send('success');
     }
+  }).then(success => {
+    return res.send(success);
+  }).catch(err => {
+    console.log(err);
+    res.status(403).end();
+  });
+};
+exports.sendUserEmail = (req, res) => {
+  const userId = +req.params.userId;
+  const title = req.body.title;
+  const content = req.body.content;
+  req.checkBody('title', 'Invalid title').notEmpty();
+  req.checkBody('content', 'Invalid content').notEmpty();
+  req.getValidationResult().then(result => {
+    if(result.isEmpty()) {
+      return user.getOne(userId).then(user => user.email);
+    }
+    result.throw();
+  }).then(emailAddress => {
+    return email.sendMail(emailAddress, title, content, {
+      type: 'user',
+    });
   }).then(success => {
     return res.send(success);
   }).catch(err => {

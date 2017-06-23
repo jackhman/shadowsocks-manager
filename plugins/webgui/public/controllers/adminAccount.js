@@ -496,6 +496,9 @@ app.controller('AdminAccountController', ['$scope', '$state', '$stateParams', '$
     $scope.setStartTime = (number) => {
       $scope.account.time += number;
     };
+    $scope.setStartTimeToCurrentTime = () => {
+      $scope.account.time = Date.now();
+    };
     $scope.setLimit = (number) => {
       $scope.account.limit += number;
       if($scope.account.limit < 1) {

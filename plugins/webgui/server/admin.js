@@ -7,6 +7,8 @@ const knex = appRequire('init/knex').knex;
 const moment = require('moment');
 const alipay = appRequire('plugins/alipay/index');
 const email = appRequire('plugins/email/index');
+const config = appRequire('services/config').all();
+const isAlipayUse = config.plugins.alipay && config.plugins.alipay.use;
 
 
 const home = appRequire('plugins/webgui/server/home');
@@ -183,7 +185,7 @@ exports.getAccountByPort = (req, res) => {
 exports.getOneAccount = (req, res) => {
   const accountId = +req.params.accountId;
   account.getAccount({ id: accountId }).then(success => {
-	const accountInfo = success[0];
+    const accountInfo = success[0];
     if(accountInfo) {
       accountInfo.data = JSON.parse(accountInfo.data);
       if(accountInfo.type >= 2 && accountInfo.type <= 5) {
@@ -492,6 +494,9 @@ exports.getRecentLoginUsers = (req, res) => {
 };
 
 exports.getRecentOrders = (req, res) => {
+  if(!isAlipayUse) {
+    return res.send([]);
+  }
   alipay.orderListAndPaging({
     pageSize: 5,
   }).then(success => {
@@ -576,6 +581,9 @@ exports.getServerPortLastConnect = (req, res) => {
 };
 
 exports.getUserOrders = (req, res) => {
+  if(!isAlipayUse) {
+    return res.send([]);
+  }
   const options = {
     userId: +req.params.userId,
   };
@@ -589,6 +597,15 @@ exports.getUserOrders = (req, res) => {
 };
 
 exports.getOrders = (req, res) => {
+  if(!isAlipayUse) {
+    return res.send({
+      maxPage: 0,
+      page: 1,
+      pageSize: 0,
+      total: 0,
+      orders: [],
+    });
+  }
   const options = {};
   options.page = +req.query.page || 1;
   options.pageSize = +req.query.pageSize || 20;
@@ -646,6 +663,7 @@ exports.addUser = (req, res) => {
     res.status(403).end();
   });
 };
+
 exports.sendUserEmail = (req, res) => {
   const userId = +req.params.userId;
   const title = req.body.title;
@@ -678,6 +696,72 @@ exports.changeUserData = (req, res) => {
     type:req.body.type,
   }).then(success => {
     res.send('success');
+  }).catch(err => {
+    console.log(err);
+    res.status(403).end();
+  });
+};
+
+exports.getAccountIp = (req, res) => {
+  const accountId = +req.params.accountId;
+  const serverId = +req.params.serverId;
+  let serverInfo;
+  knex('server').select().where({
+    id: serverId,
+  }).then(success => {
+    if(success.length) {
+      serverInfo = success[0];
+    } else {
+      return Promise.reject('server not found');
+    }
+    return account.getAccount({ id: accountId }).then(success => success[0]);
+  }).then(accountInfo => {
+    const port = accountInfo.port;
+    return manager.send({
+      command: 'ip',
+      port,
+    }, {
+      host: serverInfo.host,
+      port: serverInfo.port,
+      password: serverInfo.password,
+    });
+  }).then(ip => {
+    return res.send({ ip });
+  }).catch(err => {
+    console.log(err);
+    res.status(403).end();
+  });
+};
+
+exports.getAccountIpFromAllServer = (req, res) => {
+  const accountId = +req.params.accountId;
+  let accountInfo;
+  account.getAccount({ id: accountId }).then(success => {
+    accountInfo = success[0];
+    return knex('server').select().where({});
+  }).then(servers => {
+    const getIp = (port, serverInfo) => {
+      return manager.send({
+        command: 'ip',
+        port,
+      }, {
+        host: serverInfo.host,
+        port: serverInfo.port,
+        password: serverInfo.password,
+      });
+    };
+    promiseArray = servers.map(server => {
+      return getIp(accountInfo.port, server).catch(err => []);
+    });
+    return Promise.all(promiseArray);
+  }).then(ips => {
+    const result = [];
+    ips.forEach(ip => {
+      ip.forEach(i => {
+        if(result.indexOf(i) < 0) { result.push(i); }
+      });
+    });
+    return res.send({ ip: result });
   }).catch(err => {
     console.log(err);
     res.status(403).end();

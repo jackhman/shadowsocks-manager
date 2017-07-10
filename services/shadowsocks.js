@@ -3,6 +3,10 @@ const logger = log4js.getLogger('system');
 const cron = appRequire('init/cron');
 const dgram = require('dgram');
 const client = dgram.createSocket('udp4');
+const version = appRequire('package').version;
+const exec = require('child_process').exec;
+
+const clientIp = {};
 
 const config = appRequire('services/config').all();
 const host = config.shadowsocks.address.split(':')[0];
@@ -39,6 +43,20 @@ const connect = () => {
       let flow = JSON.parse(msgStr.substr(5));
       setExistPort(flow);
       const realFlow = compareWithLastFlow(flow, lastFlow);
+
+      for(rf in realFlow) {
+        if(realFlow[rf]) {
+          (function(port) {
+            if(!clientIp[+port]) { clientIp[+port] = []; }
+            getIp(+port).then(ip => {
+              if(ip.length) {
+                clientIp[+port].push({ time: Date.now(), ip });
+              }
+            });
+          })(rf);
+        }
+      }
+
       logger.info(`Receive flow from shadowsocks: (${ shadowsocksType })\n${JSON.stringify(realFlow, null, 2)}`);
       lastFlow = flow;
       const insertFlow = Object.keys(realFlow).map(m => {
@@ -248,8 +266,50 @@ const getFlow = async (options) => {
   }
 };
 
+const getVersion = () => {
+  return { version };
+};
+
+const getIp = port => {
+  const cmd = `netstat -ntu | grep ":${ port } " | grep ESTABLISHED | awk '{print $5}' | cut -d: -f1 | grep -v 127.0.0.1 | uniq -d`;
+  return new Promise((resolve, reject) => {
+    exec(cmd, function(err, stdout, stderr){
+      if(err) {
+        reject(stderr);
+      } else {
+        const result = [];
+        stdout.split('\n').filter(f => f).forEach(f => {
+          if(result.indexOf(f) < 0) { result.push(f); }
+        });
+        resolve(result);
+      }
+    });
+  });
+};
+
+const getClientIp = port => {
+  const result = [];
+  if(!clientIp[port] || clientIp[port].length === 0) { return result; }
+  const recentIp = clientIp[port][clientIp[port].length - 1].ip;
+  clientIp[port] = clientIp[port].filter(m => {
+    return Date.now() - m.time <= 60 * 60 * 1000;
+  });
+  clientIp[port].forEach(ci => {
+    ci.ip.forEach(i => {
+      if(result.indexOf(i) < 0) { result.push(i); }
+    });
+  });
+  if(!result.length) {
+    clientIp[port].push({ time: Date.now(), ip: recentIp });
+    return recentIp;
+  }
+  return result;
+};
+
 exports.addAccount = addAccount;
 exports.removeAccount = removeAccount;
 exports.changePassword = changePassword;
 exports.listAccount = listAccount;
 exports.getFlow = getFlow;
+exports.getVersion = getVersion;
+exports.getClientIp = getClientIp;

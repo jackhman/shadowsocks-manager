@@ -46,11 +46,6 @@ const receiveCommand = async (data, code) => {
       const port = +message.port;
       return shadowsocks.removeAccount(port);
     } else if (message.command === 'list') {
-      // const options = message.options || {
-      //   flow: true,
-      //   startTime: new Date(Date.now() - 5 * 60 * 1000),
-      //   endTime: Date.now(),
-      // };
       return shadowsocks.listAccount();
     } else if (message.command === 'pwd') {
       const port = +message.port;
@@ -59,6 +54,10 @@ const receiveCommand = async (data, code) => {
     } else if (message.command === 'flow') {
       const options = message.options;
       return shadowsocks.getFlow(options);
+    } else if (message.command === 'version') {
+      return shadowsocks.getVersion();
+    } else if (message.command === 'ip') {
+      return shadowsocks.getClientIp(message.port);
     } else {
       return Promise.reject();
     }
@@ -98,6 +97,7 @@ const checkData = (receive) => {
       receive.socket.end(pack({code: 0, data: s}));
       // receive.socket.close();
     }, e => {
+      logger.error(e);
       receive.socket.end(pack({code: 1}));
       // receive.socket.close();
     });

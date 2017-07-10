@@ -243,25 +243,24 @@ const setAccountLimit = async (userId, accountId, orderType) => {
       }).then(port => {
         if(port.random) {
           const getRandomPort = () => Math.floor(Math.random() * (port.end - port.start + 1) + port.start);
-          const retry = 0;
+          let retry = 0;
           let myPort = getRandomPort();
           const checkIfPortExists = port => {
+            let myPort = port;
             return knex('account_plugin').select()
             .where({ port }).then(success => {
-              if(success.length) { return Promise.reject('exists'); }
-              return 'not exists';
+              if(success.length && retry <= 30) {
+                retry++;
+                myPort = getRandomPort();
+                return checkIfPortExists(myPort);
+              } else if (success.length && retry > 30) {
+                return Promise.reject('Can not get a random port');
+              } else {
+                return myPort;
+              }
             });
           };
-          return checkIfPortExists(myPort)
-          .then(success => myPort)
-          .catch(err => {
-            retry++;
-            if(retry <= 30) {
-              myPort = getRandomPort();
-              return checkIfPortExists(myPort);
-            }
-            return Promise.reject('Can not get a random port');
-          });
+          return checkIfPortExists(myPort);
         } else {
           return knex('account_plugin').select()
           .whereBetween('port', [port.start, port.end])

@@ -167,6 +167,7 @@ app.controller('AdminController', ['$scope', '$mdMedia', '$mdSidenav', '$state',
       $scope.signupUsers = $localStorage.admin.indexInfo.data.signup;
       $scope.loginUsers = $localStorage.admin.indexInfo.data.login;
       $scope.orders = $localStorage.admin.indexInfo.data.order;
+      $scope.paypalOrders = $localStorage.admin.indexInfo.data.paypalOrder;
     }
     $scope.toUser = id => {
       $state.go('admin.userPage', { userId: id });
@@ -180,12 +181,13 @@ app.controller('AdminController', ['$scope', '$mdMedia', '$mdSidenav', '$state',
         $scope.signupUsers = success.signup;
         $scope.loginUsers = success.login;
         $scope.orders = success.order;
+        $scope.paypalOrders = success.paypalOrder;
       });
     };
     updateIndexInfo();
     $scope.$on('visibilitychange', (event, status) => {
       if(status === 'visible') {
-        if($localStorage.admin.indexInfo && Date.now() - $localStorage.admin.indexInfo.time >= 10 * 1000) {
+        if($localStorage.admin.indexInfo && Date.now() - $localStorage.admin.indexInfo.time >= 15 * 1000) {
           updateIndexInfo();
         }
       }
@@ -206,6 +208,17 @@ app.controller('AdminController', ['$scope', '$mdMedia', '$mdSidenav', '$state',
     $scope.setMenuSearchButton('search');
     $scope.showOrderInfo = order => {
       orderDialog.show(order);
+    };
+    $scope.myPayType = '支付宝';
+    let tabSwitchTime = 0;
+    $scope.payTypes = [{ name: '支付宝' }, { name: 'Paypal' }];
+    $scope.selectPayType = type => {
+      tabSwitchTime = Date.now();
+      $scope.myPayType = type;
+      $scope.orders = [];
+      $scope.currentPage = 1;
+      $scope.isOrderPageFinish = false;
+      $scope.getOrders();
     };
     if(!$localStorage.admin.orderFilterSettings) {
       $localStorage.admin.orderFilterSettings = {
@@ -230,14 +243,16 @@ app.controller('AdminController', ['$scope', '$mdMedia', '$mdSidenav', '$state',
       if($mdMedia('gt-md')) { return 50; }
     };
     $scope.getOrders = (search) => {
+      const oldTabSwitchTime = tabSwitchTime;
       $scope.isOrderLoading = true;
-      adminApi.getOrder({
+      adminApi.getOrder($scope.myPayType, {
         page: $scope.currentPage,
         pageSize: getPageSize(),
         search,
         // sort: $scope.userSort.sort,
         filter: Object.keys($scope.orderFilter.filter).filter(f => $scope.orderFilter.filter[f]),
       }).then(success => {
+        if(oldTabSwitchTime !== tabSwitchTime) { return; }
         if(!search && $scope.menuSearch.text) { return; }
         if(search && search !== $scope.menuSearch.text) { return; }
         success.orders.forEach(f => {
@@ -293,36 +308,7 @@ app.controller('AdminController', ['$scope', '$mdMedia', '$mdSidenav', '$state',
       $scope.orderFilterDialog();
     });
   }
-])
-.controller('AdminSettingsController', ['$scope', '$http', '$timeout', '$state',
-  ($scope, $http, $timeout, $state) => {
-    $scope.setTitle('设置');
-    let lastSave = 0;
-    let lastSavePromise = null;
-    const saveTime = 5000;
-    $scope.saveSetting = () => {
-      if(Date.now() - lastSave <= saveTime) {
-        lastSavePromise && $timeout.cancel(lastSavePromise);
-      }
-      const timeout = Date.now() - lastSave >= saveTime ? 0 : saveTime - Date.now() + lastSave;
-      lastSave = Date.now();
-      lastSavePromise = $timeout(() => {
-        $http.put('/api/admin/setting', {
-          settings: $scope.settings,
-        });
-      }, timeout);
-    };
-    $http.get('/api/admin/setting').then(success => {
-      $scope.settings = success.data.value;
-      $scope.$watch('settings', () => {
-        $scope.saveSetting();
-      }, true);
-      if(!$scope.settings.port) {
-        $scope.settings.port = { start: 50000, end: 60000, random: false };
-      }
-    });
-    $scope.toNotice = () => {
-      $state.go('admin.notice');
-    };
-  }
 ]);
+
+
+

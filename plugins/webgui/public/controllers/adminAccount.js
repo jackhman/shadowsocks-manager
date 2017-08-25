@@ -109,7 +109,7 @@ app.controller('AdminAccountController', ['$scope', '$state', '$stateParams', '$
     $q.all([
       $http.get(`/api/admin/account/${ $stateParams.accountId }`),
       $http.get('/api/admin/server'),
-      $http.get('/api/admin/setting'),
+      $http.get('/api/admin/setting/account'),
     ]).then(success => {
       $scope.account = success[0].data;
       $scope.servers = success[1].data.filter((s) => {
@@ -125,7 +125,7 @@ app.controller('AdminAccountController', ['$scope', '$state', '$stateParams', '$
         return server;
       });
       $scope.getServerPortData($scope.servers[0], $scope.account.port);
-      $scope.isMultiServerFlow = success[2].data.value.multiServerFlow;
+      $scope.isMultiServerFlow = success[2].data.multiServerFlow;
     }).catch(err => {
       $state.go('admin.account');
     });
@@ -138,10 +138,11 @@ app.controller('AdminAccountController', ['$scope', '$state', '$stateParams', '$
       adminApi.getServerPortData(serverId, port).then(success => {
         $scope.serverPortFlow = success.serverPortFlow;
         $scope.lastConnect = success.lastConnect;
-        if($scope.account.data){
-          const maxFlow = $scope.account.data.flow * ($scope.isMultiServerFlow ? 1 : server.scale);
-          server.isFlowOutOfLimit = $scope.serverPortFlow >= maxFlow;
+        let maxFlow = 0;
+        if($scope.account.data) {
+          maxFlow = $scope.account.data.flow * ($scope.isMultiServerFlow ? 1 : server.scale);
         }
+        server.isFlowOutOfLimit = maxFlow ? ($scope.serverPortFlow >= maxFlow) : false;
       });
       $scope.getChartData(serverId);
       $scope.servers.forEach((server, index) => {

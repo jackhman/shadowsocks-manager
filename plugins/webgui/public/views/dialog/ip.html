@@ -17,11 +17,17 @@
                 <md-list>
                     <md-divider></md-divider>
                     <md-list-item>
-                        <div>本服务器：</div>
+                        <div>本服务器：<span ng-show="ip.length > 0">({{ip.length}})</span></div>
                     </md-list-item>
                     <md-divider></md-divider>
                     <md-list-item ng-repeat="i in ip">
-                        <div style="width: 100%; text-align: center;" ng-click="checkIp(i)">{{i}}</div>
+                        <div flex layout="row" layout-align="space-between center">
+                            <div flex="60">{{i.ip}}</div>
+                            <div flex="40" style="text-align:right">
+                                <span style="font-size: 0.9em;">{{ i.info[0] }}</span>
+                                <span ng-show="i.info[1]" style="font-size: 0.9em;">{{ i.info[1] }}</span>
+                            </div>
+                        </div>
                         <md-divider ng-hide="$last"></md-divider>
                     </md-list-item>
                     <md-list-item ng-show="ip.length === 0">
@@ -29,11 +35,17 @@
                     </md-list-item>
                     <md-divider></md-divider>
                     <md-list-item>
-                        <div>所有服务器：</div>
+                        <div>所有服务器：<span ng-show="allIp.length > 0">({{allIp.length}})</span></div>
                     </md-list-item>
                     <md-divider></md-divider>
                     <md-list-item ng-repeat="i in allIp">
-                        <div style="width: 100%; text-align: center;" ng-click="checkIp(i)">{{i}}</div>
+                        <div flex layout="row" layout-align="space-between center">
+                            <div flex="60">{{i.ip}}</div>
+                            <div flex="40" style="text-align:right">
+                                <span style="font-size: 0.9em;">{{ i.info[0] }}</span>
+                                <span ng-show="i.info[1]" style="font-size: 0.9em;">{{ i.info[1] }}</span>
+                            </div>
+                        </div>
                         <md-divider></md-divider>
                     </md-list-item>
                     <md-list-item ng-show="allIp.length === 0">

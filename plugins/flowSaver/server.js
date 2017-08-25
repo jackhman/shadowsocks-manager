@@ -1,5 +1,6 @@
 const knex = appRequire('init/knex').knex;
 const manager = appRequire('services/manager');
+const checkAccount = appRequire('plugins/account/checkAccount');
 
 const add = (name, host, port, password, method, allot) => {
   return knex('server').insert({
@@ -24,6 +25,7 @@ const del = (id) => {
 };
 
 const edit = (id, name, host, port, password, method, scale = 1, allot) => {
+  checkAccount.deleteCheckAccountTimeServer(id);
   return knex('server').where({ id }).update({
     name,
     host,

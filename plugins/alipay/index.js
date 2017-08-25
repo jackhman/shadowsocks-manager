@@ -38,9 +38,25 @@ const createOrder = async (user, account, amount, orderType = 3) => {
   }
   const orderId = moment().format('YYYYMMDDHHmmss') + Math.random().toString().substr(2, 6);
   const time = 60;
+  const orderSetting = await knex('webguiSetting').select().where({
+    key: 'payment',
+  }).then(success => {
+    if(!success.length) {
+      return Promise.reject('settings not found');
+    }
+    success[0].value = JSON.parse(success[0].value);
+    return success[0].value;
+  }).then(success => {
+    if(orderType === 5) { return success.hour; }
+    else if(orderType === 4) { return success.day; }
+    else if(orderType === 2) { return success.week; }
+    else if(orderType === 3) { return success.month; }
+    else if(orderType === 6) { return success.season; }
+    else if(orderType === 7) { return success.year; }    
+  });
   const qrCode = await alipay_f2f.createQRPay({
     tradeNo: orderId,
-    subject: 'ss续费',
+    subject: orderSetting.orderName || 'ss续费',
     totalAmount: +amount,
     body: 'ss',
     timeExpress: 10,
@@ -63,18 +79,42 @@ const createOrder = async (user, account, amount, orderType = 3) => {
   };
 };
 
+const sendSuccessMail = async userId => {
+  const emailPlugin = appRequire('plugins/email/index');
+  const user = await knex('user').select().where({
+    type: 'normal',
+    id: userId,
+  }).then(success => {
+    if(success.length) {
+      return success[0];
+    }
+    return Promise.reject('user not found');
+  });
+  const orderMail = await knex('webguiSetting').select().where({
+    key: 'mail',
+  }).then(success => {
+    if(!success.length) {
+      return Promise.reject('settings not found');
+    }
+    success[0].value = JSON.parse(success[0].value);
+    return success[0].value.order;
+  });
+  await emailPlugin.sendMail(user.email, orderMail.title, orderMail.content);
+};
+
 cron.minute(async () => {
   if(!alipay_f2f) { return; }
   const orders = await knex('alipay').select().whereNotBetween('expireTime', [0, Date.now()]);
-  orders.forEach(order => {
+  const scanOrder = order => {
+    logger.info(`order: [${ order.orderId }]`);
     if(order.status !== 'TRADE_SUCCESS' && order.status !== 'FINISH') {
-      alipay_f2f.checkInvoiceStatus(order.orderId).then(success => {
+      return alipay_f2f.checkInvoiceStatus(order.orderId).then(success => {
         if(success.code === '10000') {
-          knex('alipay').update({
+          return knex('alipay').update({
             status: success.trade_status
           }).where({
             orderId: order.orderId,
-          }).then();
+          });
         }
       });
     } else if(order.status === 'TRADE_SUCCESS') {
@@ -83,7 +123,7 @@ cron.minute(async () => {
       push.pushMessage('支付成功', {
         body: `订单[ ${ order.orderId } ][ ${ order.amount } ]支付成功`,
       });
-      account.setAccountLimit(userId, accountId, order.orderType)
+      return account.setAccountLimit(userId, accountId, order.orderType)
       .then(() => {
         return knex('alipay').update({
           status: 'FINISH',
@@ -92,11 +132,15 @@ cron.minute(async () => {
         });
       }).then(() => {
         logger.info(`订单支付成功: [${ order.orderId }][${ order.amount }][account: ${ accountId }]`);
+        sendSuccessMail(userId);
       }).catch(err => {
         logger.error(`订单支付失败: [${ order.orderId }]`, err);
       });
     };
-  });
+  };
+  for(const order of orders) {
+    await scanOrder(order);
+  }
 }, 1);
 
 const checkOrder = async (orderId) => {
@@ -199,6 +243,11 @@ const orderListAndPaging = async (options = {}) => {
     orders,
   };
 };
+
+cron.minute(() => {
+  if(!alipay_f2f) { return; }
+  knex('alipay').delete().where({ status: 'CREATE' }).whereBetween('createTime', [0, Date.now() - 1 * 24 * 3600 * 1000]).then();
+}, 37);
 
 exports.orderListAndPaging = orderListAndPaging;
 exports.orderList = orderList;

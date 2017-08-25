@@ -79,11 +79,6 @@ app
         };
       });
     };
-
-    $scope.alipayStatus = false;
-    userApi.getAlipayStatus().then(success => {
-      $scope.alipayStatus = success.status;
-    });
   }
 ])
 .controller('UserIndexController', ['$scope', '$state', 'userApi', 'markdownDialog',
@@ -161,7 +156,7 @@ app
     };
     getUserAccountInfo();
 
-    const base64Encode = (str) => {
+    const base64Encode = str => {
       return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function(match, p1) {
         return String.fromCharCode('0x' + p1);
       }));
@@ -170,14 +165,18 @@ app
       return 'ss://' + base64Encode(method + ':' + password + '@' + host + ':' + port);
     };
 
-    $scope.getServerPortData = (account, serverId, scale, port) => {
+    $scope.getServerPortData = (account, serverId, port) => {
       account.currentServerId = serverId;
+      const scale = $scope.servers.filter(f => f.id === serverId)[0].scale;
       if(!account.isFlowOutOfLimit) { account.isFlowOutOfLimit = {}; }
       userApi.getServerPortData(account, serverId, port).then(success => {
         account.lastConnect = success.lastConnect;
         account.serverPortFlow = success.flow;
-        const maxFlow = account.data.flow * ($scope.isMultiServerFlow ? 1 : scale);
-        account.isFlowOutOfLimit[serverId] = account.serverPortFlow >= maxFlow;
+        let maxFlow = 0;
+        if(account.data) {
+          maxFlow = account.data.flow * ($scope.isMultiServerFlow ? 1 : scale);
+        }
+        account.isFlowOutOfLimit[serverId] = maxFlow ? ( account.serverPortFlow >= maxFlow ) : false;
       });
     };
 
@@ -185,13 +184,18 @@ app
       if(status === 'visible') {
         if($localStorage.user.accountInfo && Date.now() - $localStorage.user.accountInfo.time >= 10 * 1000) {
           $scope.account.forEach(a => {
-            $scope.getServerPortData(a, a.currentServerId, scale, a.port);
+            $scope.getServerPortData(a, a.currentServerId, a.port);
           });
         }
       }
     });
     $scope.setInterval($interval(() => {
-      if($scope.account) { userApi.updateAccount($scope.account); }
+      if($scope.account) {
+        userApi.updateAccount($scope.account)
+        .then(() => {
+          setAccountServerList($scope.account, $scope.servers);
+        });
+      }
       $scope.account.forEach(a => {
         const currentServerId = a.currentServerId;
         userApi.getServerPortData(a, a.currentServerId, a.port).then(success => {

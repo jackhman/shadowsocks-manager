@@ -146,7 +146,7 @@ const getUserAndPaging = async (opt = {}) => {
   const page = opt.page || 1;
   const pageSize = opt.pageSize || 20;
 
-  let count = knex('user').select().where({ type: 'normal' });
+  let count = knex('user').select();
   // let users = knex('user').select().where({ type: 'normal' });
 
   let users = knex('user').select([
@@ -162,7 +162,7 @@ const getUserAndPaging = async (opt = {}) => {
     'user.resetPasswordTime as resetPasswordTime',
     'account_plugin.port as port',
   ]).leftJoin('account_plugin', 'user.id', 'account_plugin.userId')
-  .where({ 'user.type': 'normal' }).groupBy('user.id');
+    .groupBy('user.id');
 
   if(search) {
     count = count.where('username', 'like', `%${ search }%`);

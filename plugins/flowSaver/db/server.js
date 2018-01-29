@@ -6,9 +6,6 @@ const log4js = require('log4js');
 const logger = log4js.getLogger('flowSaver');
 
 const createTable = async () => {
-  if(config.empty) {
-    await knex.schema.dropTableIfExists(tableName);
-  }
   await knex.schema.createTableIfNotExists(tableName, function(table) {
     table.increments('id');
     table.string('name');
@@ -18,21 +15,32 @@ const createTable = async () => {
     table.float('scale').defaultTo(1);
     table.integer('allot').defaultTo(0);
     table.string('method').defaultTo('aes-256-cfb');
+    table.string('comment').defaultTo('');
   });
+  const hasColumnAllot = await knex.schema.hasColumn(tableName, 'allot');
+  if(!hasColumnAllot) {
+    await knex.schema.table(tableName, function(table) {
+      table.float('allot').defaultTo(0);
+    });
+  }
   const hasColumnScale = await knex.schema.hasColumn(tableName, 'scale');
   if(!hasColumnScale) {
     await knex.schema.table(tableName, function(table) {
       table.float('scale').defaultTo(1);
     });
   }
-  knex.schema.hasColumn(tableName, 'allot')
-    .then((exists) => {
-      if(!exists){
-        return knex.schema.table(tableName, function (table) {
-          table.integer('allot').defaultTo(0);
-        })
-      }
+  const hasColumnComment = await knex.schema.hasColumn(tableName, 'comment');
+  if(!hasColumnComment) {
+    await knex.schema.table(tableName, function(table) {
+      table.string('comment').defaultTo("");
     });
+  }
+  const hasColumnShift = await knex.schema.hasColumn(tableName, 'shift');
+  if(!hasColumnShift) {
+    await knex.schema.table(tableName, function(table) {
+      table.integer('shift').defaultTo(0);
+    });
+  }
   const list = await knex('server').select(['name', 'host', 'port', 'password']);
   if(list.length === 0) {
     const host = config.manager.address.split(':')[0];

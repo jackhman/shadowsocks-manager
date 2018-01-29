@@ -75,22 +75,41 @@ exports.getOneAccount = (req, res) => {
 
 exports.getServers = (req, res) => {
   const userId = req.session.user;
-  account.getAccount({
-    userId,
-  }).then((success) => {
-    if(!success.length) {
-      res.send({});
-      return;
-    }
-    const accountInfo = success[0];
-    const server = JSON.parse(accountInfo.server);
-    knex('server').select(['id', 'host', 'name', 'method', 'scale', 'allot'])
-      .orderBy('name').then(success => {
-      res.send(success.filter(s => server.indexOf(s.id) >=0));
-    }).catch(err => {
-      console.log(err);
-      res.status(500).end();
+  let servers;
+  knex('server').select(['id', 'host', 'name', 'method', 'allot', 'scale', 'comment', 'shift']).orderBy('name')
+  .then(success => {
+    servers = success;
+    return account.getAccount({
+      userId,
+    }).then(accounts => {
+      return accounts.map(f => {
+        f.server = f.server ? JSON.parse(f.server) : f.server;
+        return f;
+      });
     });
+  })
+  .then(success => {
+    if(!success.length) {
+      return res.send([]);
+    }
+    const isAll = success.some(account => {
+      if(!account.server) { return true; }
+    });
+    if(isAll) {
+      return res.send(servers);
+    } else {
+      let accountArray = [];
+      success.forEach(account => {
+        account.server.forEach(s => {
+          if(accountArray.indexOf(s) < 0) {
+            accountArray.push(s);
+          }
+        });
+      });
+      return res.send(servers.filter(f => {
+        return accountArray.indexOf(f.id) >= 0;
+      }));
+    }
   }).catch(err => {
     console.log(err);
     res.status(500).end();
@@ -100,10 +119,10 @@ exports.getServers = (req, res) => {
 
 exports.getServerPortFlow = (req, res) => {
   const serverId = +req.params.serverId;
-  const port = +req.params.port;
+  const accountId = +req.params.accountId;
   let account = null;
   knex('account_plugin').select().where({
-    port,
+    id: accountId,
   }).then(success => {
     if(!success.length) {
       return Promise.reject('account not found');
@@ -134,7 +153,7 @@ exports.getServerPortFlow = (req, res) => {
         success[0].value = JSON.parse(success[0].value);
         return success[0].value.multiServerFlow;
       }).then(isMultiServerFlow => {
-        return flow.getServerPortFlow(serverId, port, timeArray, isMultiServerFlow);
+        return flow.getServerPortFlow(serverId, accountId, timeArray, isMultiServerFlow);
       });
     } else {
       return [ 0 ];
@@ -149,8 +168,8 @@ exports.getServerPortFlow = (req, res) => {
 
 exports.getServerPortLastConnect = (req, res) => {
   const serverId = +req.params.serverId;
-  const port = +req.params.port;
-  flow.getlastConnectTime(serverId, port)
+  const accountId = +req.params.accountId;
+  flow.getlastConnectTime(serverId, accountId)
   .then(success => {
     res.send(success);
   }).catch(err => {
@@ -159,10 +178,10 @@ exports.getServerPortLastConnect = (req, res) => {
   });
 };
 
-exports.changePassword = (req, res) => {
+exports.changeShadowsocksPassword = (req, res) => {
   const accountId = +req.params.accountId;
   const password = req.body.password;
-  if(!password) { return res.status(403).end(); };
+  if(!password) { return res.status(403).end(); }
   const isUserHasTheAccount = (accountId) => {
     return account.getAccount({userId: req.session.user, id: accountId}).then(success => {
       if(success.length) {
@@ -334,4 +353,41 @@ exports.executePaypalOrder = (req, res) => {
 exports.paypalCallback = (req, res) => {
   console.log(req.body);
   return res.send('success');
+};
+
+exports.changePassword = (req, res) => {
+  const oldPassword = req.body.password;
+  const newPassword = req.body.newPassword;
+  if(!oldPassword || !newPassword) {
+    return res.status(403).end();
+  }
+  const userId = req.session.user;
+  user.changePassword(userId, oldPassword, newPassword).then(success => {
+    res.send('success');
+  }).catch(err => {
+    console.log(err);
+    res.status(403).end();
+  });
+};
+
+exports.getTelegramCode = (req, res) => {
+  const telegramUser = appRequire('plugins/webgui_telegram/user');
+  const userId = req.session.user;
+  telegramUser.getCode(userId).then(success => {
+    res.send(success);
+  }).catch(err => {
+    console.log(err);
+    res.status(403).end();
+  });
+};
+
+exports.unbindTelegram = (req, res) => {
+  const telegramUser = appRequire('plugins/webgui_telegram/user');
+  const userId = req.session.user;
+  telegramUser.unbindUser(userId).then(success => {
+    res.send('success');
+  }).catch(err => {
+    console.log(err);
+    res.status(403).end();
+  });
 };

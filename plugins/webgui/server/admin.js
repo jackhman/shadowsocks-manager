@@ -12,6 +12,7 @@ const config = appRequire('services/config').all();
 const isAlipayUse = config.plugins.alipay && config.plugins.alipay.use;
 const isPaypalUse = config.plugins.paypal && config.plugins.paypal.use;
 const rp = require('request-promise');
+const macAccount = appRequire('plugins/macAccount/index');
 
 
 const home = appRequire('plugins/webgui/server/home');
@@ -288,33 +289,6 @@ exports.changeAccountData = (req, res) => {
   });
 };
 
-exports.getUsers = (req, res) => {
-  const page = +req.query.page || 1;
-  const pageSize = +req.query.pageSize || 20;
-  const search = req.query.search || '';
-  const sort = req.query.sort || 'id_asc';
-  user.getUserAndPaging({
-    page,
-    pageSize,
-    search,
-    sort,
-  }).then(success => {
-    success.users = success.users.map(m => {
-      return {
-        id: m.id,
-        email: m.email,
-        lastLogin: m.lastLogin,
-        username: m.username,
-        port: m.port,
-      };
-    });
-    return res.send(success);
-  }).catch(err => {
-    console.log(err);
-    res.status(403).end();
-  });
-};
-
 exports.getRecentSignUpUsers = (req, res) => {
   user.getRecentSignUp(5).then(success => {
     return res.send(success);
@@ -414,7 +388,12 @@ exports.setUserAccount = (req, res) => {
 exports.deleteUserAccount = (req, res) => {
   const userId = req.params.userId;
   const accountId = req.params.accountId;
-  account.editAccount(accountId, { userId: null }).then(success => {
+  macAccount.getAccountByAccountId(accountId).then(macAccounts => {
+    if(macAccounts.length) {
+      return res.status(403).end();
+    }
+    return account.editAccount(accountId, { userId: null });
+  }).then(success => {
     res.send(success);
   }).catch(err => {
     console.log(err);
@@ -505,8 +484,8 @@ exports.getPaypalOrders = (req, res) => {
 };
 
 exports.getUserPortLastConnect = (req, res) => {
-  const port = +req.params.port;
-  flow.getUserPortLastConnect(port).then(success => {
+  const accountId = +req.params.accountId;
+  flow.getUserPortLastConnect(accountId).then(success => {
     return res.send(success);
   }).catch(err => {
     console.log(err);
@@ -602,7 +581,7 @@ exports.getAccountIp = (req, res) => {
     const port = accountInfo.port;
     return manager.send({
       command: 'ip',
-      port,
+      port: port + serverInfo.shift,
     }, {
       host: serverInfo.host,
       port: serverInfo.port,
@@ -626,14 +605,14 @@ exports.getAccountIpFromAllServer = (req, res) => {
     const getIp = (port, serverInfo) => {
       return manager.send({
         command: 'ip',
-        port,
+        port: port + serverInfo.shift,
       }, {
         host: serverInfo.host,
         port: serverInfo.port,
         password: serverInfo.password,
       });
     };
-    promiseArray = servers.map(server => {
+    const promiseArray = servers.map(server => {
       return getIp(accountInfo.port, server).catch(err => []);
     });
     return Promise.all(promiseArray);
@@ -696,9 +675,6 @@ exports.getAccountIpInfo = (req, res) => {
     });
   };
 
-  // const getIpFunction = [taobao, sina, ipip];
-  // const random = +Math.random().toString().substr(2) % getIpFunction.length;
-  // getIpFunction[random](ip)
   const getIpFunction = ip => {
     return taobao(ip).catch(() => {
       return sina(ip);
@@ -711,5 +687,14 @@ exports.getAccountIpInfo = (req, res) => {
     return res.send(success);
   }).catch(err => {
     return res.send(['', '']);
+  });
+};
+
+exports.getAllMacAccount = (req, res) => {
+  macAccount.getAllAccount().then(success => {
+    return res.send(success);
+  }).catch(err => {
+    console.log(err);
+    res.status(403).end();
   });
 };

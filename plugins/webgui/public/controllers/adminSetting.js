@@ -18,6 +18,12 @@ app.controller('AdminSettingsController', ['$scope', '$http', '$timeout', '$stat
     $scope.toMail = () => {
       $state.go('admin.mailSetting');
     };
+    $scope.toPassword = () => {
+      $state.go('admin.passwordSetting');
+    };
+    $scope.toTelegram = () => {
+      $state.go('admin.telegramSetting');
+    };
     $scope.empty = () => {};
   }
 ]).controller('AdminPaymentSettingController', ['$scope', '$http', '$timeout', '$state',
@@ -92,8 +98,8 @@ app.controller('AdminSettingsController', ['$scope', '$http', '$timeout', '$stat
       }, true);
     });
   }
-]).controller('AdminBaseSettingController', ['$scope', '$http', '$timeout', '$state',
-  ($scope, $http, $timeout, $state) => {
+]).controller('AdminBaseSettingController', ['$scope', '$http', '$timeout', '$state', '$q',
+  ($scope, $http, $timeout, $state, $q) => {
     $scope.setTitle('基本设置');
     $scope.setMenuButton('arrow_back', 'admin.settings');
     $scope.baseData = {};
@@ -173,6 +179,48 @@ app.controller('AdminSettingsController', ['$scope', '$http', '$timeout', '$stat
     $scope.serviceWorkerUpdate = () => {
       $scope.baseData.serviceWorkerTime = Date.now();
     };
+
+    $scope.showBrowserPush = false;
+    const getSubscriptionData = () => {
+      if(!('serviceWorker' in navigator)) {
+        return;
+      }
+      $scope.showBrowserPush = true;
+      navigator.serviceWorker.ready.then(reg => {
+        return reg.pushManager.getSubscription();
+      }).then(subscription => {
+        if (!subscription) {
+          $scope.receiveBrowserPush = false;
+        } else {
+          $scope.receiveBrowserPush = true;
+        }
+      });
+    };
+    getSubscriptionData();
+    $scope.changeBrowserPush = () => {
+      navigator.serviceWorker.ready.then(reg => {
+        if($scope.receiveBrowserPush) {
+          return reg.pushManager.subscribe({
+            userVisibleOnly: true
+          }).then(success => {
+            $http.post('/api/push/client', { data: success });
+          });
+        } else {
+          let subscription;
+          return reg.pushManager.getSubscription()
+          .then(success => {
+            subscription = success;
+            return $http.delete('/api/push/client', {
+              params: {
+                data: success
+              }
+            });
+          }).then(success => {
+            return subscription.unsubscribe();
+          });
+        }
+      });
+    };
   }
 ]).controller('AdminMailSettingController', ['$scope', '$http', '$timeout', '$state', 'setEmailDialog',
   ($scope, $http, $timeout, $state, setEmailDialog) => {
@@ -187,4 +235,51 @@ app.controller('AdminSettingsController', ['$scope', '$http', '$timeout', '$stat
       setEmailDialog.show(type);
     };
   }
-]);
+]).controller('AdminPasswordSettingController', ['$scope', '$http', '$timeout', '$state', 'adminApi', 'alertDialog', '$localStorage',
+  ($scope, $http, $timeout, $state, adminApi, alertDialog, $localStorage) => {
+    $scope.setTitle('修改密码');
+    $scope.setMenuButton('arrow_back', 'admin.settings');
+    $scope.data = {
+      password: '',
+      newPassword: '',
+      newPasswordAgain: '',
+    };
+    $scope.confirm = () => {
+      alertDialog.loading();
+      adminApi.changePassword($scope.data.password, $scope.data.newPassword).then(success => {
+        alertDialog.show('修改密码成功，请重新登录', '确定')
+        .then(() => {
+          return $http.post('/api/home/logout');
+        }).then(() => {
+          $localStorage.home = {};
+          $localStorage.admin = {};
+          $state.go('home.index');
+        });
+      }).catch(err => {
+        alertDialog.show('修改密码失败', '确定');
+      });
+    };
+  }
+]).controller('AdminTelegramSettingController', ['$scope', '$http', '$interval', '$state',
+  ($scope, $http, $interval, $state) => {
+    $scope.setTitle('绑定Telegram');
+    $scope.setMenuButton('arrow_back', 'admin.settings');
+    $scope.isLoading = true;
+    $scope.code = {};
+    const getCode = () => {
+      $http.get('/api/admin/telegram/code').then(success => {
+        $scope.code = success.data;
+        $scope.isLoading = false;
+      });
+    };
+    $scope.setInterval($interval(() => {
+      getCode();
+    }, 5 * 1000));
+    getCode();
+    $scope.unbind = () => {
+      $scope.isLoading = true;
+      $http.post('/api/admin/telegram/unbind');
+    };
+  }
+])
+;

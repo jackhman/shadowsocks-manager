@@ -3,6 +3,7 @@ const serverManager = appRequire('plugins/flowSaver/server');
 const manager = appRequire('services/manager');
 const checkAccount = appRequire('plugins/account/checkAccount');
 const config = appRequire('services/config').all();
+const macAccount = appRequire('plugins/macAccount/index');
 
 const addAccount = async (type, options) => {
   checkAccount.deleteCheckAccountTimePort(options.port);
@@ -78,6 +79,12 @@ const getAccount = async (options = {}) => {
 };
 
 const delAccount = async (id) => {
+  const macAccounts = await macAccount.getAccountByAccountId(id);
+  if(macAccounts.length) {
+    macAccounts.forEach(f => {
+      macAccount.deleteAccount(f.id);
+    });
+  }
   const result = await knex('account_plugin').delete().where({ id });
   if(!result) {
     return Promise.reject('Account id[' + id + '] not found');
@@ -98,7 +105,10 @@ const editAccount = async (id, options) => {
   update.type = options.type;
   update.userId = options.userId;
   update.autoRemove = options.autoRemove;
-  update.server = options.server ? JSON.stringify(options.server) : null;
+  // update.server = options.server ? JSON.stringify(options.server) : null;
+  if(options.hasOwnProperty('server')) {
+    update.server = options.server ? JSON.stringify(options.server) : null;
+  }
   if(options.type === 1) {
     update.data = null;
     update.port = +options.port;
@@ -244,7 +254,16 @@ const setAccountLimit = async (userId, accountId, orderType) => {
       flow[payType[p]] = paymentInfo[p].flow * 1000 * 1000;
     }
   };
-  if(!accountId) {
+  let account;
+  if(accountId) {
+    account = await knex('account_plugin').select().where({ id: accountId }).then(success => {
+      if(success.length) {
+        return success[0];
+      }
+      return null;
+    });
+  }
+  if(!accountId || !account) {
     const getNewPort = () => {
       return knex('webguiSetting').select().where({
         key: 'account',
@@ -297,12 +316,6 @@ const setAccountLimit = async (userId, accountId, orderType) => {
     });
     return;
   }
-  const account = await knex('account_plugin').select().where({ id: accountId }).then(success => {
-    if(success.length) {
-      return success[0];
-    }
-    return Promise.reject('account not found');
-  });
   const accountData = JSON.parse(account.data);
   accountData.flow = flow[orderType];
   const timePeriod = {
@@ -335,7 +348,7 @@ const setAccountLimit = async (userId, accountId, orderType) => {
     autoRemove: 0,
   }).where({ id: accountId });
   checkAccount.deleteCheckAccountTimePort(port);
-  await checkAccount.checkServer();
+  // await checkAccount.checkServer();
   return;
 };
 

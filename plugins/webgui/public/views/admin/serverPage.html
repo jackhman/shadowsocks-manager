@@ -40,7 +40,8 @@
                     </div>
                 </div>
                 <div layout="row" layout-xs="column" layout-sm="column" layout-warp layout-align="center center">
-                    <div flex>
+                    <div flex-md="5" flex-gt-md="15"></div>
+                    <div width="{{getChartSize().line[0]}}">
                         <div layout="row" layout-align="center center">
                             <div>
                                 <canvas class="chart chart-line"
@@ -55,11 +56,11 @@
                             </div>
                         </div>
                     </div>
-                    <div flex>
+                    <div width="{{getChartSize().pie[0]}}">
                         <div layout="row" layout-align="center center">
                             <div>
                                 <canvas id="pie" class="chart chart-pie"
-                                    width="{{getChartSize().pie[0]}}"
+                                    width="{{getChartSize().pie[0] + 200}}"
                                     height="{{getChartSize().pie[1]}}"
                                     chart-data="pieChart.data"
                                     chart-labels="pieChart.labels"
@@ -71,7 +72,6 @@
                 </div>
             </md-card-content>
         </md-card>
-        <!-- <div flex-md="5" flex-lg="15"></div> -->
     </div>
 </div>
 <div layout="row" layout-wrap>

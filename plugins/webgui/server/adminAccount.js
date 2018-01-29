@@ -29,7 +29,7 @@ exports.addMacAccount = (req, res) => {
 
 exports.editMacAccount = (req, res) => {
   const id = req.body.id;
-  const mac = req.body.macAddress;
+  const mac = formatMacAddress(req.body.macAddress);
   const userId = req.body.userId;
   const accountId = req.body.accountId;
   const serverId = req.body.serverId;
@@ -53,7 +53,8 @@ exports.deleteMacAccount = (req, res) => {
 
 exports.getMacAccountForUser = (req, res) => {
   const mac = req.params.macAddress;
-  macAccount.getAccountForUser(mac.toLowerCase()).then(success => {
+  const ip = req.headers['x-real-ip'] || req.connection.remoteAddress;
+  macAccount.getAccountForUser(mac.toLowerCase(), ip).then(success => {
     res.send(success);
   }).catch(err => {
     console.log(err);

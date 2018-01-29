@@ -33,6 +33,7 @@ module.exports = {
   '退出': 'Exit',
 
   '我的账号': 'My account',
+  '账号': 'Account',
   '点击进入': 'Enter',
   '公告': 'Announcements',
   '暂无公告': 'Nothing here',
@@ -45,7 +46,10 @@ module.exports = {
   '周期：': 'Duration:',
   '到期时间：': 'Due Date:',
   '最近连接：': 'Last Connected:',
+  '备注：': 'Comments:',
   '修改密码': 'Change Password',
+  '修改密码成功': 'Change password success',
+  '修改密码失败': 'Change password fail',
   '续费': 'Recharge',
   '不限时': 'unlimited',
   '不限量': 'unlimited',
@@ -124,4 +128,14 @@ module.exports = {
   '付款': 'Paid',
   '完成': 'Success',
   '关闭': 'Closed',
+
+  '原密码': 'Old password',
+  '新密码': 'New password',
+  '重复新密码': 'New password again',
+
+  '类型': 'Type',
+  '端口': 'Port',
+  '流量(MB)': 'Data Usage(MB)',
+
+  '接收消息推送': 'Receive push message',
 };

@@ -17,6 +17,7 @@ app.controller('AdminAccountController', ['$scope', '$state', '$stateParams', '$
     }
     $scope.accountMethod = $localStorage.admin.accountFilterSettings;
     $scope.accountInfo = {};
+    $scope.macAccountInfo = {};
     $scope.sortAndFilter = () => {
       accountSortTool($scope.accountInfo, $scope.accountMethod);
     };
@@ -26,8 +27,16 @@ app.controller('AdminAccountController', ['$scope', '$state', '$stateParams', '$
         data: [],
       };
     }
+    if(!$localStorage.admin.macAccountInfo) {
+      $localStorage.admin.macAccountInfo = {
+        time: Date.now(),
+        data: [],
+      };
+    }
     $scope.accountInfo.originalAccount = $localStorage.admin.accountInfo.data;
     $scope.accountInfo.account = angular.copy($scope.accountInfo.originalAccount);
+    $scope.macAccountInfo.originalAccount = $localStorage.admin.macAccountInfo.data;
+    $scope.macAccountInfo.account = angular.copy($scope.macAccountInfo.originalAccount);
     $scope.sortAndFilter();
     const getAccountInfo = () => {
       adminApi.getAccount().then(accounts => {
@@ -38,6 +47,11 @@ app.controller('AdminAccountController', ['$scope', '$state', '$stateParams', '$
         $scope.accountInfo.originalAccount = accounts;
         $scope.accountInfo.account = angular.copy($scope.accountInfo.originalAccount);
         $scope.sortAndFilter();
+        return adminApi.getMacAccount();
+      }).then(macAccounts => {
+        // $scope.macAccount = macAccounts;
+        $scope.macAccountInfo.originalAccount = macAccounts;
+        $scope.macAccountInfo.account = angular.copy($scope.macAccountInfo.originalAccount);
       });
     };
     getAccountInfo();
@@ -59,6 +73,9 @@ app.controller('AdminAccountController', ['$scope', '$state', '$stateParams', '$
     $scope.toAccount = id => {
       $state.go('admin.accountPage', { accountId: id });
     };
+    $scope.toMacAccount = userId => {
+      $state.go('admin.userPage', { userId });
+    };
     $scope.sortAndFilterDialog = () => {
       accountSortDialog.show($scope.accountMethod, $scope.accountInfo);
     };
@@ -69,6 +86,9 @@ app.controller('AdminAccountController', ['$scope', '$state', '$stateParams', '$
       accountSortTool($scope.accountInfo, $scope.accountMethod);
       $scope.accountInfo.account = $scope.accountInfo.account.filter(f => {
         return (f.port + (f.user ? f.user : '')).indexOf($scope.menuSearch.text) >= 0;
+      });
+      $scope.macAccountInfo.account = $scope.macAccountInfo.originalAccount.filter(f => {
+        return (f.port + f.mac).indexOf($scope.menuSearch.text) >= 0;
       });
     };
     $scope.$on('cancelSearch', () => {
@@ -106,8 +126,9 @@ app.controller('AdminAccountController', ['$scope', '$state', '$stateParams', '$
   ($scope, $state, $stateParams, $http, $mdMedia, $q, adminApi, $timeout, $interval, qrcodeDialog, ipDialog) => {
     $scope.setTitle('账号');
     $scope.setMenuButton('arrow_back', 'admin.account');
+    $scope.accountId = +$stateParams.accountId;
     $q.all([
-      $http.get(`/api/admin/account/${ $stateParams.accountId }`),
+      $http.get(`/api/admin/account/${ $scope.accountId }`),
       $http.get('/api/admin/server'),
       $http.get('/api/admin/setting/account'),
     ]).then(success => {
@@ -124,18 +145,19 @@ app.controller('AdminAccountController', ['$scope', '$state', '$stateParams', '$
         }
         return server;
       });
-      $scope.getServerPortData($scope.servers[0], $scope.account.port);
+      $scope.getServerPortData($scope.servers[0], $scope.accountId);
       $scope.isMultiServerFlow = success[2].data.multiServerFlow;
     }).catch(err => {
+      console.log(err);
       $state.go('admin.account');
     });
     let currentServerId;
-    $scope.getServerPortData = (server, port) => {
+    $scope.getServerPortData = (server, accountId) => {
       const serverId = server.id;
       currentServerId = serverId;
       $scope.serverPortFlow = 0;
       $scope.lastConnect = 0;
-      adminApi.getServerPortData(serverId, port).then(success => {
+      adminApi.getServerPortData(serverId, accountId).then(success => {
         $scope.serverPortFlow = success.serverPortFlow;
         $scope.lastConnect = success.lastConnect;
         let maxFlow = 0;
@@ -148,13 +170,13 @@ app.controller('AdminAccountController', ['$scope', '$state', '$stateParams', '$
       $scope.servers.forEach((server, index) => {
         if(server.id === serverId) { return; }
         $timeout(() => {
-          adminApi.getServerPortData(serverId, port);
+          adminApi.getServerPortData(serverId, accountId);
         }, index * 1000);
       });
     };
     $scope.setInterval($interval(() => {
       const serverId = currentServerId;
-      adminApi.getServerPortData(serverId, $scope.account.port).then(success => {
+      adminApi.getServerPortData(serverId, $scope.accountId).then(success => {
         if(serverId !== currentServerId) { return; }
         $scope.lastConnect = success.lastConnect;
         $scope.serverPortFlow = success.serverPortFlow;
@@ -262,8 +284,8 @@ app.controller('AdminAccountController', ['$scope', '$state', '$stateParams', '$
         },
       };
     };
-    $scope.getChartData = (serverId) => {
-      adminApi.getAccountChartData(serverId, $stateParams.accountId, $scope.account.port, $scope.flowType.value, flowTime[$scope.flowType.value])
+    $scope.getChartData = serverId => {
+      adminApi.getAccountChartData(serverId, $scope.accountId, $scope.flowType.value, flowTime[$scope.flowType.value])
       .then(success => {
         $scope.sumFlow = success[0].data.reduce((a, b) => {
           return a + b;
@@ -332,6 +354,18 @@ app.controller('AdminAccountController', ['$scope', '$state', '$stateParams', '$
     };
     $scope.clientIp = (serverId, accountId) => {
       ipDialog.show(serverId, accountId);
+    };
+    $scope.cycleStyle = account => {
+      let percent = 0;
+      if(account.type !== 1) {
+        percent = ((Date.now() - account.data.from) / (account.data.to - account.data.from) * 100).toFixed(0);
+      }
+      if(percent > 100) {
+        percent = 100;
+      }
+      return {
+        background: `linear-gradient(90deg, rgba(0,0,0,0.12) ${ percent }%, rgba(0,0,0,0) 0%)`
+      };
     };
   }
 ])

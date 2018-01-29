@@ -4,12 +4,14 @@ const sessionParser = appRequire('plugins/webgui/index').sessionParser;
 const home = appRequire('plugins/webgui/server/home');
 const user = appRequire('plugins/webgui/server/user');
 const admin = appRequire('plugins/webgui/server/admin');
+const adminUser = appRequire('plugins/webgui/server/adminUser');
 const adminServer = appRequire('plugins/webgui/server/adminServer');
 const adminFlow = appRequire('plugins/webgui/server/adminFlow');
 const adminSetting = appRequire('plugins/webgui/server/adminSetting');
 const adminNotice = appRequire('plugins/webgui/server/adminNotice');
 const adminAccount = appRequire('plugins/webgui/server/adminAccount');
 const push = appRequire('plugins/webgui/server/push');
+const os = require('os');
 const path = require('path');
 const knex = appRequire('init/knex').knex;
 const config = appRequire('services/config').all();
@@ -36,6 +38,7 @@ app.get('/api/home/login', home.status);
 app.post('/api/home/code', home.sendCode);
 app.post('/api/home/signup', home.signup);
 app.post('/api/home/login', home.login);
+app.post('/api/home/macLogin', home.macLogin);
 app.post('/api/home/logout', home.logout);
 app.post('/api/home/password/sendEmail', home.sendResetPasswordEmail);
 app.get('/api/home/password/reset', home.checkResetPasswordToken);
@@ -48,6 +51,7 @@ app.put('/api/admin/server/:serverId(\\d+)', isAdmin, adminServer.editServer);
 app.delete('/api/admin/server/:serverId(\\d+)', isAdmin, adminServer.deleteServer);
 
 app.get('/api/admin/account', isAdmin, admin.getAccount);
+app.get('/api/admin/macAccount', isAdmin, admin.getAllMacAccount);
 app.get('/api/admin/account/port/:port(\\d+)', isAdmin, admin.getAccountByPort);
 app.get('/api/admin/account/:accountId(\\d+)', isAdmin, admin.getOneAccount);
 app.get('/api/admin/account/:serverId(\\d+)/:accountId(\\d+)/ip', isAdmin, admin.getAccountIp);
@@ -69,11 +73,11 @@ app.get('/api/admin/flow/:serverId(\\d+)', isAdmin, adminFlow.getServerFlow);
 app.get('/api/admin/flow/:serverId(\\d+)/lastHour', isAdmin, adminFlow.getServerLastHourFlow);
 app.get('/api/admin/flow/:serverId(\\d+)/user', isAdmin, adminFlow.getServerUserFlow);
 app.get('/api/admin/flow/account/:accountId(\\d+)', isAdmin, adminFlow.getAccountServerFlow);
-app.get('/api/admin/flow/:serverId(\\d+)/:port(\\d+)', isAdmin, adminFlow.getServerPortFlow);
-app.get('/api/admin/flow/:serverId(\\d+)/:port(\\d+)/lastConnect', isAdmin, adminFlow.getServerPortLastConnect);
+app.get('/api/admin/flow/:serverId(\\d+)/:accountId(\\d+)', isAdmin, adminFlow.getServerPortFlow);
+app.get('/api/admin/flow/:serverId(\\d+)/:accountId(\\d+)/lastConnect', isAdmin, adminFlow.getServerPortLastConnect);
 
-app.get('/api/admin/user', isAdmin, admin.getUsers);
-app.post('/api/admin/user/add', isAdmin, admin.addUser);
+app.get('/api/admin/user', isAdmin, adminUser.getUsers);
+app.post('/api/admin/user/add', isAdmin, adminUser.addUser);
 app.get('/api/admin/user/recentSignUp', isAdmin, admin.getRecentSignUpUsers);
 app.get('/api/admin/user/recentLogin', isAdmin, admin.getRecentLoginUsers);
 
@@ -83,7 +87,7 @@ app.post('/api/admin/user/:userId(\\d+)/sendEmail', isAdmin, admin.sendUserEmail
 app.put('/api/admin/user/:userId(\\d+)/:accountId(\\d+)', isAdmin, admin.setUserAccount);
 app.delete('/api/admin/user/:userId(\\d+)', isAdmin, admin.deleteUser);
 app.delete('/api/admin/user/:userId(\\d+)/:accountId(\\d+)', isAdmin, admin.deleteUserAccount);
-app.get('/api/admin/user/:port(\\d+)/lastConnect', isAdmin, admin.getUserPortLastConnect);
+app.get('/api/admin/user/:accountId(\\d+)/lastConnect', isAdmin, admin.getUserPortLastConnect);
 
 app.put('/api/admin/user/:userId(\\d+)/data', isAdmin, admin.changeUserData);
 
@@ -109,14 +113,15 @@ app.put('/api/admin/setting/base', isAdmin, adminSetting.modifyBase);
 app.get('/api/admin/setting/mail', isAdmin, adminSetting.getMail);
 app.put('/api/admin/setting/mail', isAdmin, adminSetting.modifyMail);
 
+app.post('/api/admin/setting/changePassword', isAdmin, adminSetting.changePassword);
 
 app.get('/api/user/notice', isUser, user.getNotice);
 app.get('/api/user/account', isUser, user.getAccount);
 app.get('/api/user/account/:accountId(\\d+)', isUser, user.getOneAccount);
 app.get('/api/user/server', isUser, user.getServers);
-app.get('/api/user/flow/:serverId(\\d+)/:port(\\d+)', isUser, user.getServerPortFlow);
-app.get('/api/user/flow/:serverId(\\d+)/:port(\\d+)/lastConnect', isUser, user.getServerPortLastConnect);
-app.put('/api/user/:accountId(\\d+)/password', isUser, user.changePassword);
+app.get('/api/user/flow/:serverId(\\d+)/:accountId(\\d+)', isUser, user.getServerPortFlow);
+app.get('/api/user/flow/:serverId(\\d+)/:accountId(\\d+)/lastConnect', isUser, user.getServerPortLastConnect);
+app.put('/api/user/:accountId(\\d+)/password', isUser, user.changeShadowsocksPassword);
 app.get('/api/user/multiServerFlow', isUser, user.getMultiServerFlowStatus);
 
 app.get('/api/user/status/alipay', isUser, user.getAlipayStatus);
@@ -131,21 +136,44 @@ app.post('/api/user/paypal/execute', isUser, user.executePaypalOrder);
 app.post('/api/user/alipay/callback', user.alipayCallback);
 app.post('/api/user/paypal/callback', user.paypalCallback);
 
-if(config.plugins.webgui.gcmAPIKey && config.plugins.webgui.gcmSenderId) {
-  app.post('/api/push/client', push.client);
+app.post('/api/user/changePassword', isUser, user.changePassword);
+
+if(config.plugins.webgui_telegram && config.plugins.webgui_telegram.use) {
+  const telegram = appRequire('plugins/webgui_telegram/account');
+  app.get('/api/user/telegram/code', isUser, user.getTelegramCode);
+  app.get('/api/admin/telegram/code', isAdmin, adminSetting.getTelegramCode);
+  app.post('/api/user/telegram/unbind', isUser, user.unbindTelegram);
+  app.post('/api/admin/telegram/unbind', isAdmin, adminSetting.unbindTelegram);
+  app.get('/api/user/telegram/qrcode/:qrcodeId', telegram.qrcode);
+  app.post('/api/user/telegram/login', telegram.login);
 }
 
-// app.get('/serviceworker.js', (req, res) => {
-//   res.header('Content-Type', 'text/javascript');
-//   res.sendFile('serviceworker.js', {
-//     root: path.resolve(__dirname, '../public/'),
-//   }, err => {
-//     if (err) {
-//       console.log(err);
-//       return res.status(404).end();
-//     }
-//   });
-// });
+if(config.plugins.webgui.gcmAPIKey && config.plugins.webgui.gcmSenderId) {
+  app.post('/api/push/client', push.client);
+  app.delete('/api/push/client', push.deleteClient);
+}
+
+app.get('/favicon.png', (req, res) => {
+  let file = './libs/favicon.png';
+  let options = {
+    root: './plugins/webgui/'
+  };
+  const iconPath = config.plugins.webgui.icon;
+  if(iconPath) {
+    const ssmgrPath = path.resolve(os.homedir(), './.ssmgr/');
+    if (iconPath[0] === '/' || iconPath[0] === '.') {
+      options = {};
+      file = path.resolve(iconPath);
+    } else if (iconPath[0] === '~') {
+      file = '.' + iconPath.substr(1);
+      options.root = os.homedir();
+    } else {
+      file = iconPath;
+      options.root = ssmgrPath;
+    }
+  }
+  res.sendFile(file, options);
+});
 
 const manifest = appRequire('plugins/webgui/views/manifest').manifest;
 app.get('/manifest.json', (req, res) => {
@@ -170,9 +198,11 @@ const configForFrontend = {
   paypal: config.plugins.paypal && config.plugins.paypal.use,
   paypalMode: config.plugins.paypal && config.plugins.paypal.mode,
   macAccount: config.plugins.macAccount && config.plugins.macAccount.use,
+  telegram: config.plugins.webgui_telegram && config.plugins.webgui_telegram.use,
 };
 
 const cdn = config.plugins.webgui.cdn;
+const analytics = config.plugins.webgui.googleAnalytics || '';
 const colors = [
   { value: 'red', color: '#F44336' },
   { value: 'pink', color: '#E91E63' },
@@ -213,7 +243,9 @@ const homePage = (req, res) => {
       title: success.title,
       version,
       cdn,
+      analytics,
       config: configForFrontend,
+      paypal: !!(config.plugins.paypal && config.plugins.paypal.use),
     });
   });
 };
@@ -241,6 +273,10 @@ app.get('/serviceworker.js', (req, res) => {
   
 });
 
+app.get('*', (req, res) => {
+  res.redirect('/');
+});
+
 // wss.on('connection', function connection(ws) {
 //   // console.log(ws);
 //   ws.on('message', function incoming(message) {
@@ -249,7 +285,3 @@ app.get('/serviceworker.js', (req, res) => {
 //   ws.send('ws connected');
 // });
 
-// const shell = appRequire('plugins/webgui/server/shell');
-// shell.getConnectionIp(10000).then(console.log).catch(err => {
-//   console.log('err', err);
-// });

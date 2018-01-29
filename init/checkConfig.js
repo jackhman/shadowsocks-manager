@@ -7,13 +7,12 @@ const log = appRequire('init/log');
 const log4js = require('log4js');
 const logger = log4js.getLogger('system');
 
-const ssmgrPath = path.resolve(os.homedir() + '/.ssmgr/');
+const ssmgrPath = path.resolve(os.homedir(), './.ssmgr/');
 
 program
   .version('shadowsocks-manager ' + version)
   .option('-c, --config [file]', 'config file, default: ~/.ssmgr/default.yml')
   .option('-d, --db [file]', 'sqlite3 file, sample: ~/.ssmgr/db.sqlite')
-  .option('-e, --empty', 'clean database')
   .option('-t, --type [type]', 'type, s for server side, m for manager side')
   .option('-s, --shadowsocks [address]', 'ss-manager address, sample: 127.0.0.1:6001')
   .option('-m, --manager [address]', 'manager address, sample: 0.0.0.0:6002')
@@ -32,7 +31,6 @@ const config = appRequire('services/config');
 let logName = 'uname';
 
 if(program.type) {config.set('type', program.type);}
-if(program.empty) {config.set('empty', program.empty);}
 if(program.shadowsocks) {config.set('shadowsocks.address', program.shadowsocks);}
 if(program.manager) {config.set('manager.address', program.manager);}
 if(program.password) {config.set('manager.password', program.password);}

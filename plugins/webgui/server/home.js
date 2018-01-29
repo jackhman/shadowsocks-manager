@@ -13,7 +13,7 @@ const macAccount = appRequire('plugins/macAccount/index');
 
 const isTelegram = config.plugins.webgui_telegram && config.plugins.webgui_telegram.use;
 let telegram;
-if(isTelegram) {
+if (isTelegram) {
   telegram = appRequire('plugins/webgui_telegram/admin');
 }
 
@@ -54,13 +54,14 @@ exports.signup = (req, res) => {
     if (success[0] > 1) {
       return autoAddAccount(success[0])
     } else {
-      return true;
+      return;
     }
   }).then(success => {
     logger.info(`[${ req.body.email }] signup success`);
     push.pushMessage('注册', {
       body: `用户[ ${ req.body.email.toString().toLowerCase() } ]注册成功`,
     });
+    isTelegram && telegram.push(`用户[ ${ req.body.email.toString().toLowerCase() } ]注册成功`);
     res.send('success');
   }).catch(err => {
     logger.error(`[${ req.body.email }] signup fail: ${ err }`);
@@ -71,7 +72,7 @@ exports.signup = (req, res) => {
 const autoAddAccount = (userId) => {
   // let port = 50000;
   return knex('webguiSetting').select().where({
-        key: 'account',
+    key: 'account',
   })
     .then(success => JSON.parse(success[0].value))
     .then(success => {
@@ -81,21 +82,23 @@ const autoAddAccount = (userId) => {
       }
       const getNewPort = () => {
         return knex('webguiSetting').select().where({
-            key: 'account',
+          key: 'account',
         }).then(success => {
-            if(!success.length) { return Promise.reject('settings not found'); }
+          if (!success.length) {
+            return Promise.reject('settings not found');
+          }
           success[0].value = JSON.parse(success[0].value);
           return success[0].value.port;
         }).then(port => {
           if (port.random) {
             const getRandomPort = () => Math.floor(Math.random() * (port.end - port.start + 1) + port.start);
-              let retry = 0;
+            let retry = 0;
             let myPort = getRandomPort();
             const checkIfPortExists = port => {
-                let myPort = port;
-                return knex('account_plugin').select()
-                .where({ port }).then(success => {
-                  if(success.length && retry <= 30) {
+              let myPort = port;
+              return knex('account_plugin').select()
+                .where({port}).then(success => {
+                  if (success.length && retry <= 30) {
                     retry++;
                     myPort = getRandomPort();
                     return checkIfPortExists(myPort);
@@ -136,21 +139,7 @@ const autoAddAccount = (userId) => {
         });
       });
     });
-    } else {
-      return;
-    }
-  }).then(success => {
-    logger.info(`[${ req.body.email }] signup success`);
-    push.pushMessage('注册', {
-      body: `用户[ ${ req.body.email.toString().toLowerCase() } ]注册成功`,
-    });
-    isTelegram && telegram.push(`用户[ ${ req.body.email.toString().toLowerCase() } ]注册成功`);
-    res.send('success');
-  }).catch(err => {
-    logger.error(`[${ req.body.email }] signup fail: ${ err }`);
-    res.status(403).end();
-  });
-};
+}
 
 exports.autoAddAccount = autoAddAccount;
 
@@ -188,11 +177,11 @@ exports.macLogin = (req, res) => {
   const mac = formatMacAddress(req.body.mac);
   const ip = req.headers['x-real-ip'] || req.connection.remoteAddress;
   macAccount.login(mac, ip)
-  .then(success => {
-    req.session.user = success.userId;
-    req.session.type = 'normal';
-    return res.send('success');
-  }).catch(err => {
+    .then(success => {
+      req.session.user = success.userId;
+      req.session.type = 'normal';
+      return res.send('success');
+    }).catch(err => {
     return res.status(403).end();
   });
 };
@@ -204,34 +193,38 @@ exports.logout = (req, res) => {
 };
 
 exports.status = (req, res) => {
-  res.send({ status: req.session.type });
+  res.send({status: req.session.type});
 };
 
 exports.sendCode = (req, res) => {
   req.checkBody('email', 'Invalid email').isEmail();
   req.getValidationResult().then(result => {
-    if(result.isEmpty) { return; }
+    if (result.isEmpty) {
+      return;
+    }
     return Promise.reject('invalid email');
   }).then(() => {
     return knex('webguiSetting').select().where({
       key: 'account',
     })
-    .then(success => JSON.parse(success[0].value))
-    .then(success => {
-      if(success.signUp.isEnable) { return; }
-      return Promise.reject('signup close');
-    });
+      .then(success => JSON.parse(success[0].value))
+      .then(success => {
+        if (success.signUp.isEnable) {
+          return;
+        }
+        return Promise.reject('signup close');
+      });
   }).then(() => {
     return knex('webguiSetting').select().where({
       key: 'mail',
     }).then(success => {
-      if(!success.length) {
+      if (!success.length) {
         return Promise.reject('settings not found');
       }
       success[0].value = JSON.parse(success[0].value);
       return success[0].value.code;
     });
-  }).then(success =>{
+  }).then(success => {
     const email = req.body.email.toString().toLowerCase();
     const ip = req.headers['x-real-ip'] || req.connection.remoteAddress;
     const session = req.sessionID;
@@ -244,7 +237,7 @@ exports.sendCode = (req, res) => {
   }).catch(err => {
     logger.error(err);
     const errorData = ['email in black list', 'send email out of limit', 'signup close'];
-    if(errorData.indexOf(err) < 0) {
+    if (errorData.indexOf(err) < 0) {
       return res.status(403).end();
     } else {
       return res.status(403).end(err);
@@ -260,7 +253,7 @@ exports.sendResetPasswordEmail = (req, res) => {
   knex('webguiSetting').select().where({
     key: 'mail',
   }).then(success => {
-    if(!success.length) {
+    if (!success.length) {
       return Promise.reject('settings not found');
     }
     success[0].value = JSON.parse(success[0].value);
@@ -270,20 +263,20 @@ exports.sendResetPasswordEmail = (req, res) => {
     return knex('user').select().where({
       username: email,
     }).then(users => {
-      if(!users.length) {
+      if (!users.length) {
         return Promise.reject('user not exists');
       }
       return users[0];
     });
   }).then(user => {
-    if(user.resetPasswordTime + 600 * 1000 >= Date.now()) {
+    if (user.resetPasswordTime + 600 * 1000 >= Date.now()) {
       return Promise.reject('already send');
     }
     token = crypto.randomBytes(16).toString('hex');
     const ip = req.headers['x-real-ip'] || req.connection.remoteAddress;
     const session = req.sessionID;
     const address = config.plugins.webgui.site + '/home/password/reset/' + token;
-    if(resetEmail.content.indexOf('${address}') >= 0) {
+    if (resetEmail.content.indexOf('${address}') >= 0) {
       resetEmail.content = resetEmail.content.replace(/\$\{address\}/g, address);
     } else {
       resetEmail.content += '\n' + address;
@@ -305,7 +298,7 @@ exports.sendResetPasswordEmail = (req, res) => {
   }).catch(err => {
     logger.error(err);
     const errorData = ['already send', 'user not exists'];
-    if(errorData.indexOf(err) < 0) {
+    if (errorData.indexOf(err) < 0) {
       return res.status(403).end();
     } else {
       return res.status(403).end(err);
@@ -317,13 +310,13 @@ exports.checkResetPasswordToken = (req, res) => {
   const token = req.query.token;
   knex('user').select().where({
     resetPasswordId: token,
-  }).whereBetween('resetPasswordTime', [ Date.now() - 600 * 1000, Date.now() ])
-  .then(users => {
-    if(!users.length) {
-      return Promise.reject('user not exists');
-    }
-    return users[0];
-  }).then(success => {
+  }).whereBetween('resetPasswordTime', [Date.now() - 600 * 1000, Date.now()])
+    .then(users => {
+      if (!users.length) {
+        return Promise.reject('user not exists');
+      }
+      return users[0];
+    }).then(success => {
     res.send('success');
   }).catch(err => {
     console.log(err);
@@ -335,7 +328,9 @@ exports.resetPassword = (req, res) => {
   req.checkBody('token', 'Invalid token').notEmpty();
   req.checkBody('password', 'Invalid password').notEmpty();
   req.getValidationResult().then(result => {
-    if(result.isEmpty) { return; }
+    if (result.isEmpty) {
+      return;
+    }
     return Promise.reject('invalid body');
   }).then(() => {
     const token = req.body.token;

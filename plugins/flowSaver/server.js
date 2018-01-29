@@ -50,7 +50,7 @@ const list = async (options = {}) => {
     'port',
     'password',
     'method',
-    'allot'
+    'allot',
     'scale',
     'comment',
     'shift',
